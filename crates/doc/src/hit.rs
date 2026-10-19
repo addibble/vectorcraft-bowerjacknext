@@ -125,14 +125,37 @@ fn clip_contains(clip: &Node, p: Point) -> bool {
     clip.clip_shapes(Some(&frame)).iter().any(|(bp, rule)| fill_contains(bp, *rule, p))
 }
 
+/// A press on the outline of clipping path `clip` (a path or a compound path; type clips by its
+/// glyphs, which this crate cannot outline), within the tolerance.
+fn clip_outline(clip: &Node, p: Point, opt: HitOptions) -> Option<HitKind> {
+    let bp = match &clip.kind {
+        NodeKind::Path { path, .. } => path.to_bezpath(),
+        NodeKind::Compound { .. } => clip.stroke_path()?,
+        _ => return None,
+    };
+    stroke_contains(&bp, 0.0, opt.tol, p).then_some(HitKind::Outline)
+}
+
 fn hit_children(parent: &Node, p: Point, opt: HitOptions, skip: &dyn Fn(NodeId) -> bool, chain: &mut Vec<NodeId>) -> Option<Hit> {
     let children = parent.children()?;
-    // A clip group (or a layer with a clipping mask) only hits inside its clipping path.
     if parent.clips()
         && let Some(clip) = children.first()
-        && !clip_contains(clip, p)
     {
-        return None;
+        // The clipping path's own outline, within the tolerance, is hit before the art it clips,
+        // as Illustrator's is: there Direct Selection takes its segments, and the Selection tool
+        // the clip group.
+        if clip.visible
+            && !clip.locked
+            && !skip(clip.id)
+            && let Some(kind) = clip_outline(clip, p, opt)
+        {
+            chain.push(clip.id);
+            return Some(Hit { leaf: clip.id, ancestry: chain.clone(), kind, contents_of: None, layers: 1 });
+        }
+        // Elsewhere a clip group (or a layer with a clipping mask) only hits inside it.
+        if !clip_contains(clip, p) {
+            return None;
+        }
     }
     for (i, c) in children.iter().enumerate().rev() {
         if parent.shaper.is_some() {
@@ -379,6 +402,29 @@ mod tests {
         assert_eq!(marquee(&d, Rect::new(-5.0, -5.0, 5.0, 5.0), None, false), vec![g]);
         assert_eq!(marquee(&d, Rect::new(-5.0, -5.0, 5.0, 5.0), None, true), vec![a]);
         assert!(marquee(&d, Rect::new(100.0, 100.0, 105.0, 105.0), None, false).is_empty());
+    }
+
+    /// A clip group's clipping path is hit on its outline, within the tolerance, before the art it
+    /// clips and just outside it too, as Illustrator's is; inside, the art is hit.
+    #[test]
+    fn a_clipping_path_is_hit_on_its_outline_before_its_art() {
+        let mut d = Document::new(200.0, 200.0);
+        let l = d.layers[0].id;
+        let (g, clip, art) = (d.alloc_id(), d.alloc_id(), d.alloc_id());
+        let mut path = Node::path(clip, shapes::rectangle(Rect::new(40.0, 40.0, 140.0, 140.0)), Appearance::basic(Paint::None, Paint::None, 0.0));
+        if let NodeKind::Path { clipping, .. } = &mut path.kind {
+            *clipping = true;
+        }
+        let picture = Node::path(art, shapes::rectangle(Rect::new(0.0, 0.0, 200.0, 200.0)), Appearance::default_art());
+        d.insert(Some(l), 0, Node::new(g, NodeKind::Group { children: vec![Arc::new(path), Arc::new(picture)], clip: true })).unwrap();
+        for (x, y) in [(140.0, 90.0), (141.5, 90.0), (138.5, 90.0), (90.0, 40.0)] {
+            let h = hit_test(&d, Point::new(x, y), HitOptions::default()).unwrap();
+            assert_eq!((h.leaf, h.kind, h.top_object(None)), (clip, HitKind::Outline, g), "at {x}, {y}");
+        }
+        let h = hit_test(&d, Point::new(90.0, 90.0), HitOptions::default()).unwrap();
+        assert_eq!((h.leaf, h.top_object(None)), (art, g));
+        // Beyond the tolerance outside it, the clipped art is not there to hit.
+        assert!(hit_test(&d, Point::new(150.0, 90.0), HitOptions::default()).is_none());
     }
 
     /// Art in a sublayer is an object of its own: a click or a marquee takes it, not the
