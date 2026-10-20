@@ -413,7 +413,16 @@ impl ToolContext<'_> {
             type_path_only: self.type_path_only,
             scope: self.isolation,
             skip_guides: !self.guides,
+            clip_outlines: false,
         }
+    }
+
+    /// [`Self::hit_options`] for the selection tools (Selection, Direct Selection, Group
+    /// Selection): a clipping path is also hit on its outline ([`HitOptions::clip_outlines`]).
+    ///
+    /// [`HitOptions::clip_outlines`]: vectorcraft_doc::hit::HitOptions::clip_outlines
+    pub fn selection_hit_options(&self) -> vectorcraft_doc::hit::HitOptions {
+        vectorcraft_doc::hit::HitOptions { clip_outlines: true, ..self.hit_options() }
     }
 }
 
