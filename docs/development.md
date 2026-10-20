@@ -1,7 +1,6 @@
 # Development
 
-> **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
-> **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
+> **Last updated:** 2026-10-20 · **Change:** leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's `bundled-fonts` feature).
 
 ## Web build
 
@@ -166,9 +165,20 @@ own font catalogue) depends on the engine with `default-features = false` and do
 twice. Its font database starts without them: on the web and without craft-fonts it starts empty,
 and text has no glyphs until a font is added.
 
-- The workspace declares `vectorcraft-text` without default features, so no library crate turns the
-  fonts back on; a crate whose tests lay type out asks for `bundled-fonts` in its
-  dev-dependencies (or gets it through `vectorcraft-testkit`, which uses the engine).
+An embedder that also hosts the egui panels depends on `vectorcraft-ui-egui` with
+`default-features = false` as well: its own `bundled-fonts` feature, on by default, turns the
+engine's on. The panels' interface faces (Source Sans 3 Regular and Semibold, Inter Regular and
+SemiBold, JetBrains Mono: `theme.rs`) are compiled in either way, so leaving the document fonts
+out of an embedder of the panels saves the other faces, about 1.4 MB.
+
+- The workspace declares `vectorcraft-text` and `vectorcraft-engine` without default features, so
+  each crate that wants the fonts asks for them (the apps, and `vectorcraft-testkit` for tests);
+  a crate whose tests lay type out asks for `bundled-fonts` in its dev-dependencies (or gets it
+  through `vectorcraft-testkit`).
+- `cargo xtask ci`'s `no-bundled-fonts` step also checks that `vectorcraft-ui-egui` without its
+  default features turns them on nowhere (`cargo tree -p vectorcraft-ui-egui --no-default-features
+  -e features,normal -i vectorcraft-text`); a test of the panels can't see that configuration, since
+  their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
   configuration without them.
 
@@ -375,6 +385,7 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-20 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `bundled-fonts` feature, and the engine declared without default features. |
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
