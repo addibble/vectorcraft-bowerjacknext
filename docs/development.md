@@ -1,6 +1,6 @@
 # Development
 
-> **Last updated:** 2026-10-20 · **Change:** leaving out the translations (`translations` feature); leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's `bundled-fonts` feature).
+> **Last updated:** 2026-10-20 · **Change:** leaving out the translations (`translations` feature); leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's `bundled-fonts` feature); painting the tools' overlays on an embedder's canvas (`canvas::paint_overlays`).
 
 ## Web build
 
@@ -277,6 +277,15 @@ code as it is).
   the feature (`#[cfg(feature = "translations")]`).
 - `cargo xtask ci`'s `no-translations` step lints the crate and runs its library tests without the
   feature (`i18n/tests_compiled_in.rs` checks the languages offered both ways).
+## Painting the tools' overlays on a canvas of one's own (embedders)
+
+An embedder that draws documents on a canvas of its own and drives the engine's tools
+(`Session::pointer`) paints their feedback (`Session::overlays`: marquees, paths, anchors,
+Curvature points, handles, labels, measurements, gradient stops) with
+`vectorcraft_ui_egui::canvas::paint_overlays(painter, xf, overlays, prefs)`, the painter the canvas
+uses, so it keeps up with the tools. `xf` (`canvas::Xf`) maps the document to the screen. The
+selection's own anchors, handles and bounding box, and the canvas's other feedback, are not tool
+overlays and stay the canvas's.
 
 ## Cursors
 
@@ -405,6 +414,7 @@ do not replace expected hashes automatically in response to a download mismatch.
 |---|---|---|
 | 2026-10-20 | minor | Document the `translations` feature of vectorcraft-ui-egui (Localisation › Leaving out the translations). |
 | 2026-10-20 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `bundled-fonts` feature, and the engine declared without default features. |
+| 2026-10-20 | minor | Document `canvas::paint_overlays` for embedders (Painting the tools' overlays on a canvas of one's own). |
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
