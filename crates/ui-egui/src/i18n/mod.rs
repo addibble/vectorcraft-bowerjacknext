@@ -26,6 +26,21 @@
 
 mod catalog;
 
+/// A language's catalog, compiled in with the `translations` feature; without it every language
+/// but English is left out (its catalog is empty, and [`Lang::all`] and [`Lang::from_code`] skip it).
+#[cfg(feature = "translations")]
+macro_rules! catalog_tsv {
+    ($file:literal) => {
+        include_str!($file)
+    };
+}
+#[cfg(not(feature = "translations"))]
+macro_rules! catalog_tsv {
+    ($file:literal) => {
+        ""
+    };
+}
+
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -101,32 +116,32 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "el",
         name: "Ελληνικά",
-        source: include_str!("el.tsv"),
+        source: catalog_tsv!("el.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
     // Japanese: the whole interface (every menu string and `tl!` literal) and the status and error
     // messages, keeping the product, workspace and perspective preset names in English (`MENU_KEEP_AS_IS`).
-    LangInfo { code: "ja", name: "日本語", source: include_str!("ja.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "ja", name: "日本語", source: catalog_tsv!("ja.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Korean: the whole interface and the status and error messages, keeping the same names in
     // English as Japanese; a count takes no plural, so plurals have one form. Hangul is drawn with an
     // installed system font (craft-fonts has no Korean UI face yet); every `ko-*` locale resolves here.
-    LangInfo { code: "ko", name: "한국어", source: include_str!("ko.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "ko", name: "한국어", source: catalog_tsv!("ko.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Vietnamese: complete menus and messages, with one plural form.
     // Every `vi-*` locale resolves here.
     LangInfo {
-        code: "vi", name: "Tiếng Việt", source: include_str!("vi.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
+        code: "vi", name: "Tiếng Việt", source: catalog_tsv!("vi.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
     },
     // Czech: the whole interface (every menu string and `tl!` literal) and the status and error
     // messages, with one/few/other plurals, keeping the same names in English as Spanish.
-    LangInfo { code: "cs", name: "Čeština", source: include_str!("cs.tsv"), plural: plural_czech, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "cs", name: "Čeština", source: catalog_tsv!("cs.tsv"), plural: plural_czech, complete_menus: true, catalog: OnceLock::new() },
     // German: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `de-*` locale (`de-DE`, `de-AT`, `de-CH`, `de-LU` …) resolves here.
     LangInfo {
         code: "de",
         name: "Deutsch",
-        source: include_str!("de.tsv"),
+        source: catalog_tsv!("de.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -136,20 +151,20 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "es",
         name: "Español",
-        source: include_str!("es.tsv"),
+        source: catalog_tsv!("es.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
     // French: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `fr-*` locale (`fr-FR`, `fr-BE`, `fr-CA`, `fr-CH` …) resolves here.
-    LangInfo { code: "fr", name: "Français", source: include_str!("fr.tsv"), plural: plural_french, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "fr", name: "Français", source: catalog_tsv!("fr.tsv"), plural: plural_french, complete_menus: true, catalog: OnceLock::new() },
     // Italian: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `it-*` locale (`it-IT`, `it-CH`, `it-SM` …) resolves here.
     LangInfo {
         code: "it",
         name: "Italiano",
-        source: include_str!("it.tsv"),
+        source: catalog_tsv!("it.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -158,14 +173,14 @@ pub static LANGUAGES: [LangInfo; 24] = [
     // English as Spanish. Georgian nouns stay singular after a number, so one plural form;
     // `ka-GE` and `ka_GE.UTF-8` resolve here.
     LangInfo {
-        code: "ka", name: "ქართული", source: include_str!("ka.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
+        code: "ka", name: "ქართული", source: catalog_tsv!("ka.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new()
     },
     // Russian: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `ru-*` locale (`ru-RU`, `ru-BY`, `ru-KZ` …) resolves here.
     LangInfo {
         code: "ru",
         name: "Русский",
-        source: include_str!("ru.tsv"),
+        source: catalog_tsv!("ru.tsv"),
         plural: plural_east_slavic,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -175,7 +190,7 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "uk",
         name: "Українська",
-        source: include_str!("uk.tsv"),
+        source: catalog_tsv!("uk.tsv"),
         plural: plural_east_slavic,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -185,7 +200,7 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "bg",
         name: "Български",
-        source: include_str!("bg.tsv"),
+        source: catalog_tsv!("bg.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -193,17 +208,17 @@ pub static LANGUAGES: [LangInfo; 24] = [
     // Hungarian: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; a count takes the singular ("3 réteg"), so plurals have one form. Every
     // `hu-*` locale (including `hu-HU`) resolves here.
-    LangInfo { code: "hu", name: "Magyar", source: include_str!("hu.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "hu", name: "Magyar", source: catalog_tsv!("hu.tsv"), plural: plural_none, complete_menus: true, catalog: OnceLock::new() },
     // Polish: the whole interface and the status and error messages, with one/few/many plurals,
     // keeping the same names in English as Spanish; every `pl-*` locale (including `pl-PL`)
     // resolves here.
-    LangInfo { code: "pl", name: "Polski", source: include_str!("pl.tsv"), plural: plural_polish, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "pl", name: "Polski", source: catalog_tsv!("pl.tsv"), plural: plural_polish, complete_menus: true, catalog: OnceLock::new() },
     // Swedish: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; every `sv-*` locale (`sv-SE`, `sv-FI` …) resolves here.
     LangInfo {
         code: "sv",
         name: "Svenska",
-        source: include_str!("sv.tsv"),
+        source: catalog_tsv!("sv.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -214,7 +229,7 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "pt-br",
         name: "Português (Brasil)",
-        source: include_str!("pt-br.tsv"),
+        source: catalog_tsv!("pt-br.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -224,7 +239,7 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "zh-hant",
         name: "繁體中文",
-        source: include_str!("zh-hant.tsv"),
+        source: catalog_tsv!("zh-hant.tsv"),
         plural: plural_none,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -234,7 +249,7 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "zh-hans",
         name: "简体中文",
-        source: include_str!("zh-hans.tsv"),
+        source: catalog_tsv!("zh-hans.tsv"),
         plural: plural_none,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -242,19 +257,19 @@ pub static LANGUAGES: [LangInfo; 24] = [
     LangInfo {
         code: "nl",
         name: "Nederlands",
-        source: include_str!("nl.tsv"),
+        source: catalog_tsv!("nl.tsv"),
         plural: plural_one_other,
         complete_menus: true,
         catalog: OnceLock::new(),
     },
     // Danish; every `da-*` locale (`da-DK`, `da_DK.UTF-8`…) resolves here.
-    LangInfo { code: "da", name: "Dansk", source: include_str!("da.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "da", name: "Dansk", source: catalog_tsv!("da.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
     // Indonesian; every `id-*` locale (`id-ID`, `id_ID.UTF-8`…) resolves here. CLDR `id` counts
     // have one form, so `@plural` entries list a single form.
     LangInfo {
         code: "id",
         name: "Bahasa Indonesia",
-        source: include_str!("id.tsv"),
+        source: catalog_tsv!("id.tsv"),
         plural: plural_none,
         complete_menus: true,
         catalog: OnceLock::new(),
@@ -262,10 +277,16 @@ pub static LANGUAGES: [LangInfo; 24] = [
     // Finnish: the whole interface and the status and error messages, keeping the same names in
     // English as Spanish; one/other plurals with the partitive after any number but 1 ("2 tasoa").
     // Every `fi-*` locale resolves here.
-    LangInfo { code: "fi", name: "Suomi", source: include_str!("fi.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
+    LangInfo { code: "fi", name: "Suomi", source: catalog_tsv!("fi.tsv"), plural: plural_one_other, complete_menus: true, catalog: OnceLock::new() },
 ];
 
 impl LangInfo {
+    /// Is this language's catalog in the binary? English (the source language) always is; the
+    /// others only with the `translations` feature.
+    fn compiled_in(&self) -> bool {
+        self.code == "en" || cfg!(feature = "translations")
+    }
+
     fn catalog(&self) -> &Catalog {
         self.catalog.get_or_init(|| Catalog::parse(self.source))
     }
@@ -298,7 +319,7 @@ impl Lang {
 
     /// A language by its exact code.
     pub fn from_code(code: &str) -> Option<Lang> {
-        LANGUAGES.iter().find(|l| l.code.eq_ignore_ascii_case(code)).map(Lang)
+        LANGUAGES.iter().filter(|l| l.compiled_in()).find(|l| l.code.eq_ignore_ascii_case(code)).map(Lang)
     }
 
     /// Resolve the `interfaceLanguage` preference: a language code, or `auto` (and anything
@@ -309,16 +330,17 @@ impl Lang {
 
     /// Every registered language.
     pub fn all() -> impl Iterator<Item = Lang> {
-        LANGUAGES.iter().map(Lang)
+        LANGUAGES.iter().filter(|l| l.compiled_in()).map(Lang)
     }
 
     pub fn name(self) -> &'static str {
         self.0.name
     }
 
-    /// Does this language's catalog claim to cover every menu string and `tl!` literal?
+    /// Does this language's catalog claim to cover every menu string and `tl!` literal? Never
+    /// for a language whose catalog is left out (the `translations` feature).
     pub fn complete_menus(self) -> bool {
-        self.0.complete_menus
+        self.0.complete_menus && self.0.compiled_in()
     }
 
     fn catalog(self) -> &'static Catalog {
@@ -593,3 +615,5 @@ pub fn tn(n: u64, one: &str, other: &str) -> String {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_compiled_in;
