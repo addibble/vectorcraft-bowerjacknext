@@ -9,7 +9,10 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 workspace = true
 
 [features]
-default = ["translations"]
+default = ["translations", "bundled-fonts"]
+# The fonts vectorcraft-text bundles, through the engine's `bundled-fonts` (about 3.4 MB of the
+# binary). Off, for an embedder that supplies every document font itself.
+bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 # The interface's translations (`src/i18n/*.tsv`, about 6.5 MB of the binary). Off, the interface is
 # English only and lists no other language: for an embedder that draws VectorCraft's panels in an
 # English interface of its own and would ship them unused.
@@ -24,7 +27,9 @@ vectorcraft-brush = { workspace = true }
 vectorcraft-render = { workspace = true }
 vectorcraft-text = { workspace = true }
 vectorcraft-tools = { workspace = true }
-vectorcraft-engine = { workspace = true }
+# By path, without its default features, so `bundled-fonts` below can leave the fonts out (a
+# workspace dependency keeps the workspace entry's default features whatever a member says).
+vectorcraft-engine = { path = "../engine", default-features = false }
 vectorcraft-svg = { workspace = true }
 vectorcraft-effects = { workspace = true }
 vectorcraft-three-d = { workspace = true }
