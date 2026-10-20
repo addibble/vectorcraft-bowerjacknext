@@ -521,6 +521,24 @@ proptest! {
         survive(&svg, || vectorcraft_svg::import(&svg).ok())?;
     }
 
+    /// `effects_of_filters` reads a fragment an embedder hands it: hostile filters, other markup
+    /// and garbage are refused or read, never a panic.
+    #[test]
+    fn svg_filter_fragments_never_panic(
+        body in prop::collection::vec(arb_svg_element(2), 0..6),
+        garbage in ".{0,200}",
+    ) {
+        for fragment in [format!("<filter id=\"a\">{}</filter>", body.concat()), body.concat(), garbage] {
+            // What reads back as effects writes filters again.
+            let r = catch_quiet(|| {
+                if let Some(effects) = vectorcraft_svg::effects_of_filters(&fragment) {
+                    let _ = vectorcraft_svg::filter_elements(&effects, "fz", &vectorcraft_svg::FilterOptions::default());
+                }
+            });
+            prop_assert!(r.is_ok(), "{fragment}: panicked: {:?}", r.err());
+        }
+    }
+
     #[test]
     fn svg_hostile_css_never_panics(
         sheet in r#"[a-z#.>*\[\]=:;{}@ !"'/,-]{0,160}"#,

@@ -312,3 +312,76 @@ pub(super) fn effects(filters: &[Arc<Filter>], ts: Affine, blends: &HashMap<Stri
     }
     Some(out)
 }
+
+/// The longest fragment [`effects_of_filters`] reads, and the most filters in it.
+const MAX_FILTERS_LEN: usize = 1 << 20;
+const MAX_FILTERS: usize = 256;
+
+/// The live effects the SVG `<filter>` elements of `filters` stand for, applied in their order to
+/// an element: a fragment of one or more `<filter id="…">` elements and nothing else, as
+/// [`crate::filter_elements`] writes them. `None` when one isn't an effect the canvas draws
+/// (Gaussian Blur, Feather, Drop Shadow, Outer Glow, Inner Glow), a filter has no id or shares
+/// one, the fragment holds anything but filters, nests too deep, is longer than 1 MiB or holds
+/// more than 256 filters, or doesn't parse. Nothing is read from outside the fragment: a filter
+/// primitive's link to a file (`feImage`) reads nothing.
+pub fn effects_of_filters(filters: &str) -> Option<Vec<Effect>> {
+    if filters.len() > MAX_FILTERS_LEN {
+        return None;
+    }
+    const NS: &str = "http://www.w3.org/2000/svg";
+    let defs = format!("<svg xmlns=\"{NS}\"><defs>{filters}</defs></svg>");
+    // usvg and roxmltree read elements by recursion: the nesting is capped first, and read on a
+    // deep stack, as the import does.
+    if super::depth::xml_too_deep(&defs) {
+        return None;
+    }
+    vectorcraft_doc::depth::with_deep_stack(|| {
+        // The fragment must be the one <defs> and a run of filters with ids of their own.
+        let ids: Vec<String> = {
+            let xml = roxmltree::Document::parse(&defs).ok()?;
+            if super::depth::too_deep(&xml) {
+                return None;
+            }
+            let mut root = xml.root_element().children().filter(roxmltree::Node::is_element);
+            let (Some(defs), None) = (root.next(), root.next()) else { return None };
+            let id = |n: roxmltree::Node| if n.tag_name().name() == "filter" { n.attribute("id").map(str::to_string) } else { None };
+            let ids: Vec<String> = defs.children().filter(roxmltree::Node::is_element).map(id).collect::<Option<_>>()?;
+            let unique: std::collections::HashSet<&String> = ids.iter().collect();
+            if ids.is_empty() || ids.len() > MAX_FILTERS || unique.len() != ids.len() {
+                return None;
+            }
+            ids
+        };
+        let refs: Vec<String> = ids.iter().map(|id| format!("url(#{id})")).collect();
+        let src = format!(
+            "<svg xmlns=\"{NS}\" width=\"100\" height=\"100\"><defs>{filters}</defs><rect width=\"100\" height=\"100\" filter=\"{}\"/></svg>",
+            crate::xml_escape(&refs.join(" "))
+        );
+        let xml = roxmltree::Document::parse(&src).ok()?;
+        // Images are read only from data: URLs, never from a file.
+        let opt = usvg::Options {
+            image_href_resolver: usvg::ImageHrefResolver {
+                resolve_data: usvg::ImageHrefResolver::default_data_resolver(),
+                resolve_string: Box::new(|_, _| None),
+            },
+            ..usvg::Options::default()
+        };
+        let tree = usvg::Tree::from_str(&src, &opt).ok()?;
+        let group = filtered_group(tree.root())?;
+        if group.filters().len() != ids.len() {
+            return None;
+        }
+        effects(group.filters(), Affine::IDENTITY, &blends(&xml))
+    })
+}
+
+/// The first group under `g` (or `g` itself) that has filters.
+fn filtered_group(g: &usvg::Group) -> Option<&usvg::Group> {
+    if !g.filters().is_empty() {
+        return Some(g);
+    }
+    g.children().iter().find_map(|n| match n {
+        usvg::Node::Group(c) => filtered_group(c),
+        _ => None,
+    })
+}
