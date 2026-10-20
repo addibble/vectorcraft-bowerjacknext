@@ -1,6 +1,10 @@
 # Development
 
 > **Last updated:** 2026-10-20 · **Change:** leaving out the translations (`translations` feature).
+> **Last updated:** 2026-10-20 · **Change:** leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's `bundled-fonts` feature).
+> **Last updated:** 2026-10-20 · **Change:** painting the tools' overlays on an embedder's canvas (`canvas::paint_overlays`).
+> **Last updated:** 2026-10-20 · **Change:** marking the Properties fields (`widgets::set_field_hook`, `FieldKey`).
+> **Last updated:** 2026-10-20 · **Change:** the Contextual Task Bar and the canvas context menu on a canvas of one's own (`canvas::task_bar`, `canvas::context_menu`).
 > **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
 > **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
 
@@ -161,15 +165,27 @@ CRAFT_FONTS_DIR="$PWD/../craft-fonts" cargo xtask ci   # also runs the Japanese-
 
 The Latin fonts in `assets/fonts/` are compiled into `vectorcraft-text` by its `bundled-fonts`
 feature (3.4 MB of the binary). It is on by default, and `vectorcraft-engine`'s default
-`bundled-fonts` feature turns it on, so the apps and anything built on the engine have them. An
+`bundled-fonts` feature turns it on, so the apps and anything built on the engine with its default
+features have them. An
 embedder that brings every font itself at run time (`FontDb::add_font`, say a web app serving its
 own font catalogue) depends on the engine with `default-features = false` and doesn't ship them
 twice. Its font database starts without them: on the web and without craft-fonts it starts empty,
 and text has no glyphs until a font is added.
 
-- The workspace declares `vectorcraft-text` without default features, so no library crate turns the
-  fonts back on; a crate whose tests lay type out asks for `bundled-fonts` in its
-  dev-dependencies (or gets it through `vectorcraft-testkit`, which uses the engine).
+An embedder that also hosts the egui panels depends on `vectorcraft-ui-egui` with
+`default-features = false` as well: its own `bundled-fonts` feature, on by default, turns the
+engine's on. The panels' interface faces (Source Sans 3 Regular and Semibold, Inter Regular and
+SemiBold, JetBrains Mono: `theme.rs`) are compiled in either way, so leaving the document fonts
+out of an embedder of the panels saves the other faces, about 1.4 MB.
+
+- The workspace declares `vectorcraft-text` and `vectorcraft-engine` without default features, so
+  each crate that wants the fonts asks for them (the apps, and `vectorcraft-testkit` for tests);
+  a crate whose tests lay type out asks for `bundled-fonts` in its dev-dependencies (or gets it
+  through `vectorcraft-testkit`).
+- `cargo xtask ci`'s `no-bundled-fonts` step also checks that `vectorcraft-ui-egui` without its
+  default features turns them on nowhere, for any target (`cargo tree -p vectorcraft-ui-egui
+  --no-default-features --target all -e features,normal -i vectorcraft-text`); a test of the panels
+  can't see that configuration, since their dev-dependencies turn the fonts on.
 - `cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts` checks the
   configuration without them.
 
@@ -271,6 +287,44 @@ code as it is).
   feature; whether a language is offered is tested both ways in the ordinary test run
   (`i18n/tests_compiled_in.rs`, which also checks, run without the feature, that no catalog is
   compiled in). Preferences and the Language menu then offer Automatic and English.
+
+## Painting the tools' overlays on a canvas of one's own (embedders)
+
+An embedder that draws documents on a canvas of its own and drives the engine's tools
+(`Session::pointer`) paints their feedback (`Session::overlays`: marquees, paths, anchors,
+Curvature points, handles, labels, measurements, gradient stops; `vectorcraft_engine::tools::Overlay`)
+with `vectorcraft_ui_egui::canvas::paint_overlays(painter, xf, overlays, prefs)`, the painter the
+canvas uses, so it keeps up with the tools. It paints them after the document and the selection,
+as the canvas does. `xf` (`canvas::Xf`) maps the document to the screen. The
+selection's own anchors, handles and bounding box, and the canvas's other feedback, are not tool
+overlays and stay the canvas's.
+
+## Showing the task bar and the context menu on a canvas of one's own (embedders)
+
+An embedder that draws documents on a canvas of its own shows the Contextual Task Bar with
+`vectorcraft_ui_egui::canvas::task_bar(app, ui, xf)` after its document and the tools' overlays,
+and the canvas context menu with `canvas::context_menu(app, response, xf)`, where `response` is
+its canvas's (`Sense::click_and_drag`) and `xf` (`canvas::Xf`) maps the document to the screen.
+The task bar shows under the conditions this canvas uses (Window › Task Bar on, no busy tool, not
+while the Simplify slider or the 3D revolve gizmo has the canvas, not in Presentation Mode) and
+the context menu opens no menu in Presentation Mode; both list what applies to the selection and run what is chosen through the
+app's commands, so they keep up with the app. The task bar's text buttons are named by their
+labels for screen readers and egui's test harness. The Properties panel's Quick Actions are a
+section of their own (`panels::properties::quick_actions_section`), as its other sections are.
+
+## Marking the Properties fields (embedders)
+
+An embedder that hosts the egui panels can mark individual fields (say a linked or overridden
+indicator) without forking them. `widgets::set_field_hook(ctx, Some(hook))` installs a hook that
+runs after each Properties field is drawn, with the field's response and a `widgets::FieldKey`
+naming the property it edits: the selection's X, Y, W, H and angle, corner radius, the Fill and
+Stroke chips, stroke weight, cap, corner, miter limit and dashes, opacity, font family and style,
+the Character fields and the paragraph alignment. The hook may paint over the field or put a small
+widget on it (`ui.put`), but adds nothing to the layout, since the fields sit in grids. A field is
+keyed where it is drawn (`widgets::keyed`, or `widgets::field_drawn` when its response is at
+hand), and a keyed field takes the place the field alone would. The Properties panel's sections
+(`transform_section`, `appearance_section`, `fill_stroke_rows`, `image_section`, `type_sections`,
+`document_sections`) are public, so an embedder can also compose them with sections of its own.
 
 ## Cursors
 
@@ -397,7 +451,11 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-20 | minor | Document `canvas::task_bar` and `canvas::context_menu` for embedders (Showing the task bar and the context menu on a canvas of one's own), and the Properties Quick Actions as a section. |
 | 2026-10-20 | minor | Document the `translations` feature of vectorcraft-ui-egui (Localisation › Leaving out the translations). |
+| 2026-10-20 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `bundled-fonts` feature, and the engine declared without default features. |
+| 2026-10-20 | minor | Document `canvas::paint_overlays` for embedders (Painting the tools' overlays on a canvas of one's own). |
+| 2026-10-20 | minor | Document the Properties field hook and the public Properties sections (Marking the Properties fields). |
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
