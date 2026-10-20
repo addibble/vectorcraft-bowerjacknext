@@ -99,13 +99,40 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         crate::chrome::anchor_buttons(app, ui, anchors);
     }
     divider(ui);
+    quick_actions_section(app, ui);
+}
+
+/// The Quick Actions of the selected objects: Group and Make Clipping Mask for several, Ungroup
+/// and Isolate Group for a group, and for a clipping group Edit Clipping Path and Edit Contents
+/// before them (they select its clipping path or its clipped art for the selection tools, as
+/// Object › Clipping Mask does; the Properties panel's buttons for a clipping mask,
+/// <https://helpx.adobe.com/illustrator/desktop/manage-objects/edit-objects/edit-clipping-masks.html>),
+/// Expand Shape for a live shape, Recolor for art of several colours, Image Trace, Crop Image and
+/// Mask for an image, then Offset Path, Simplify, Arrange: Bring to Front and Lock. Nothing with
+/// nothing selected or in Edit Artboards, whose Properties have their own. Public for an embedder
+/// that composes the Properties panel from its sections.
+pub fn quick_actions_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+    if app.session.tool_id() == "artboard" {
+        return;
+    }
+    let Some(n_sel) = app.session.active().map(|st| st.selection.len()) else { return };
+    let first = first_selected(app);
+    if first.is_none() {
+        return;
+    }
+    let is_image = n_sel == 1 && matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Image(_)));
     section_header(ui, tl!("Quick Actions"));
     let is_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { .. }));
+    let is_clip_group = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Group { clip: true, .. }));
     let is_live = matches!(first.as_ref().map(|n| &n.kind), Some(NodeKind::Path { live: Some(l), .. }) if !matches!(**l, LiveShape::Path { .. }));
     let mut actions: Vec<(&str, &str)> = vec![];
     if n_sel > 1 {
         actions.push((tl!("Group"), "object.group"));
         actions.push((tl!("Make Clipping Mask"), "object.clippingMask.make"));
+    }
+    if is_clip_group {
+        actions.push((tl!("Edit Clipping Path"), "object.clippingMask.editMask"));
+        actions.push((tl!("Edit Contents"), "object.clippingMask.editContents"));
     }
     if is_group {
         actions.push((tl!("Ungroup"), "object.ungroup"));
@@ -632,6 +659,43 @@ mod tests {
         let b = |pressed| Event::PointerButton { pos: at, button: PointerButton::Primary, pressed, modifiers: Default::default() };
         frame(app, ctx, vec![Event::PointerMoved(at), b(true)]);
         frame(app, ctx, vec![b(false)]);
+    }
+
+    /// A clipping group's Quick Actions begin with Edit Clipping Path and Edit Contents, which
+    /// select its clipping path or its clipped art for the selection tools, before a group's
+    /// Ungroup and Isolate Group. The section draws nothing with nothing selected or in Edit
+    /// Artboards, as the panel never did.
+    #[test]
+    fn a_clip_groups_quick_actions_edit_its_clipping_path_or_its_contents() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let art = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 80, "width": 200, "height": 140})).unwrap()["id"].clone();
+        let mask = app.session.execute("shape.ellipse", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [art, mask]})).unwrap();
+        let group = app.session.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        let ctx = egui::Context::default();
+        let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.iter().map(|n| json!(n.0)).collect::<Vec<_>>();
+        let texts = frame(&mut app, &ctx, vec![]);
+        let labels: Vec<&str> = texts.iter().map(|(t, _)| t.as_str()).collect();
+        let at = |label: &str| labels.iter().position(|t| *t == label).unwrap_or_else(|| panic!("{label} in {labels:?}"));
+        assert!(at("Edit Clipping Path") < at("Edit Contents") && at("Edit Contents") < at("Ungroup") && at("Ungroup") < at("Isolate Group"));
+        click(&mut app, &ctx, &texts, "Edit Contents");
+        assert_eq!(selected(&app), std::slice::from_ref(&art), "Edit Contents selects the clipped art");
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        let texts = frame(&mut app, &ctx, vec![]);
+        click(&mut app, &ctx, &texts, "Edit Clipping Path");
+        assert_eq!(selected(&app), std::slice::from_ref(&mask), "Edit Clipping Path selects the clipping path");
+        // The section alone, as an embedder composes it: nothing with nothing selected or with the
+        // Artboard tool.
+        let section =
+            |app: &mut VectorcraftApp| panel_frame(app, &ctx, vec![], quick_actions_section).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        assert!(section(&mut app).contains(&"Quick Actions".to_string()));
+        app.select_tool("artboard");
+        assert!(section(&mut app).is_empty(), "Edit Artboards has its own");
+        app.select_tool("selection");
+        app.run("select.none", json!({})).unwrap();
+        assert!(section(&mut app).is_empty(), "nothing selected");
     }
 
     /// The Snap Options and Scale Strokes & Effects checkboxes keep a visible box at rest in every
