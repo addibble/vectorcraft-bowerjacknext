@@ -1,7 +1,6 @@
 # Development
 
-> **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
-> **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
+> **Last updated:** 2026-10-20 · **Change:** painting the tools' overlays on an embedder's canvas (`canvas::paint_overlays`).
 
 ## Web build
 
@@ -250,6 +249,16 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   system font; the glyph test checks Latin and Cyrillic catalogs always and the CJK ones only with craft-fonts.
   A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
 
+## Painting the tools' overlays on a canvas of one's own (embedders)
+
+An embedder that draws documents on a canvas of its own and drives the engine's tools
+(`Session::pointer`) paints their feedback (`Session::overlays`: marquees, paths, anchors,
+Curvature points, handles, labels, measurements, gradient stops) with
+`vectorcraft_ui_egui::canvas::paint_overlays(painter, xf, overlays, prefs)`, the painter the canvas
+uses, so it keeps up with the tools. `xf` (`canvas::Xf`) maps the document to the screen. The
+selection's own anchors, handles and bounding box, and the canvas's other feedback, are not tool
+overlays and stay the canvas's.
+
 ## Cursors
 
 `crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
@@ -375,6 +384,7 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-20 | minor | Document `canvas::paint_overlays` for embedders (Painting the tools' overlays on a canvas of one's own). |
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |
