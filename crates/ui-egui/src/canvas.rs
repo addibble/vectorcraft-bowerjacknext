@@ -3005,6 +3005,23 @@ fn names_an_artboard(text: &str) -> bool {
     text.split_once(" - ").is_some_and(|(n, _)| n.len() >= 2 && n.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// Paints `overlays` (`vectorcraft_engine::tools::Overlay`), the active tool's feedback
+/// ([`vectorcraft_engine::Session::overlays`]), as this canvas paints them, for an embedder that
+/// draws the document on a canvas of its own: marquees, paths, lines, anchors, Curvature points and
+/// handles, labels, measurements, highlights, grid lines and gradient stops. `prefs` (Selection &
+/// Anchor Display) sizes the Curvature points and handles and styles the handles; anchors are drawn
+/// at the size the tool gives them.
+///
+/// It paints these alone. The canvas also draws the selection's own anchors, handles and bounding
+/// box, hover highlights, Shaper widgets and other feedback of its own, which aren't tool
+/// overlays; and it leaves the Gradient tool's overlays out under View › Hide Gradient Annotator,
+/// which an embedder offering that does too. Measurements and the selected gradient stop take
+/// their colors from the context's theme ([`theme::Tokens::get`]: the default one unless
+/// [`theme::apply`] ran), and labels are in the interface language ([`crate::i18n::current`]).
+pub fn paint_overlays(painter: &egui::Painter, xf: &Xf, overlays: &[Overlay], prefs: &vectorcraft_engine::Prefs) {
+    draw_overlays(painter, xf, overlays, &Tokens::get(painter.ctx()), HandleLook::of(prefs));
+}
+
 fn draw_overlays(p: &egui::Painter, xf: &Xf, overlays: &[Overlay], t: &Tokens, look: HandleLook) {
     for o in overlays {
         match o {
@@ -3589,6 +3606,44 @@ mod tests {
         assert_eq!(color_image(&img), egui);
         let short = vectorcraft_render::Rendered { width: 3, height: 2, pixels: vec![255; 5] };
         assert_eq!(color_image(&short), egui::ColorImage::new([3, 2], vec![egui::Color32::TRANSPARENT; 6]));
+    }
+
+    /// An embedder's canvas paints the tools' overlays where this one does, in the look the
+    /// preferences set: a Curvature point as a circle and an anchor as a square, each at its point
+    /// on screen, and a handle as a dot; Size and Handles (Selection & Anchor Display) grow the
+    /// points and handles.
+    #[test]
+    fn paint_overlays_draws_each_overlay_at_its_screen_point_in_the_preferred_look() {
+        let ctx = egui::Context::default();
+        let xf = Xf { rect: egui::Rect::from_min_size(Pos2::ZERO, vec2(200.0, 100.0)), zoom: 2.0, center: Point::new(10.0, 5.0), rot: 0.0 };
+        let overlays = [
+            Overlay::CurvePoint { p: Point::new(20.0, 5.0), color: [0, 120, 255], filled: true, size: 7.0 },
+            Overlay::Anchor { p: Point::new(10.0, 15.0), color: [0, 120, 255], filled: true, size: 6.0 },
+            Overlay::Handle { p: Point::new(0.0, 5.0), color: [0, 120, 255] },
+        ];
+        let radii = |prefs: &vectorcraft_engine::Prefs| {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| paint_overlays(ui.painter(), &xf, &overlays, prefs));
+            out.textures_delta.clear();
+            let shapes: Vec<Shape> = out.shapes.into_iter().map(|c| c.shape).collect();
+            // (10, 15) is 10 pt below the centre at zoom 2: 20 px below the rect's centre (100, 50).
+            assert!(
+                shapes.iter().any(|s| matches!(s, Shape::Rect(r) if r.rect.center() == pos2(100.0, 70.0) && r.rect.width() == 6.0)),
+                "{shapes:?}"
+            );
+            let radius = |at: Pos2| {
+                shapes.iter().find_map(|s| match s {
+                    Shape::Circle(c) if c.center == at => Some(c.radius),
+                    _ => None,
+                })
+            };
+            // The Curvature point 20 px right of the centre, the handle 20 px left of it.
+            (radius(pos2(120.0, 50.0)), radius(pos2(80.0, 50.0)))
+        };
+        let default = vectorcraft_engine::Prefs::default();
+        assert_eq!(radii(&default), (Some(3.5), Some(2.75)));
+        // Size 7 grows the points by 4 px, and the large handle style is 1.5 px larger still.
+        let large = vectorcraft_engine::Prefs { anchor_size: 7, handle_style: "large".into(), ..default };
+        assert_eq!(radii(&large), (Some(5.5), Some(6.25)));
     }
 
     /// With VECTORCRAFT_SYSTEM_CURSORS set the glyphs aren't drawn and the system's cursors stand in: those of
