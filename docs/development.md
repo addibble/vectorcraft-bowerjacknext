@@ -1,7 +1,6 @@
 # Development
 
-> **Last updated:** 2026-10-14 · **Change:** leaving out the bundled fonts (`bundled-fonts` feature).
-> **Last updated:** 2026-10-14 · **Change:** document-font registration for all explicitly supplied faces.
+> **Last updated:** 2026-10-20 · **Change:** leaving out the translations (`translations` feature).
 
 ## Web build
 
@@ -250,6 +249,24 @@ other `sv-*` locale resolve to it), Georgian (`ka`, complete; `ka-GE` and `ka_GE
   system font; the glyph test checks Latin and Cyrillic catalogs always and the CJK ones only with craft-fonts.
   A Traditional Chinese UI font is still to be added to craft-fonts for the web build.
 
+### Leaving out the translations (embedders)
+
+The interface's translations, one catalog per language in `crates/ui-egui/src/i18n/*.tsv`, are
+compiled into `vectorcraft-ui-egui` by its `translations` feature (about 6.5 MB of the binary).
+It is on by default, so the apps have every language. An embedder whose interface is English only
+(an app that embeds a few panels in an English interface) depends on `vectorcraft-ui-egui` with
+`default-features = false` and doesn't ship them: about 2.0 MB of a web build's transfer gzipped,
+1.1 MB with Brotli. Without them the interface is English: `Lang::all` offers English alone,
+`Lang::from_code` knows no other code, no language claims complete menus, and a system locale for
+another language resolves to English. A preference saved by a build with them, such as
+`interfaceLanguage: "fr"`, falls back to English as an unknown code does (Preferences shows the
+code as it is).
+
+- The catalog tests (`i18n/tests.rs`) and the tests that read another language's catalog run with
+  the feature (`#[cfg(feature = "translations")]`).
+- `cargo xtask ci`'s `no-translations` step lints the crate and runs its library tests without the
+  feature (`i18n/tests_compiled_in.rs` checks the languages offered both ways).
+
 ## Cursors
 
 `crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
@@ -375,6 +392,7 @@ do not replace expected hashes automatically in response to a download mismatch.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-20 | minor | Document the `translations` feature of vectorcraft-ui-egui (Localisation › Leaving out the translations). |
 | 2026-10-14 | minor | Document the `bundled-fonts` feature of vectorcraft-text and vectorcraft-engine (Fonts › Leaving out the bundled fonts). |
 | 2026-10-14 | minor | Document registration of every explicitly supplied craft-fonts face after the existing script-specific prefix; empty input and web selection remain unchanged. |
 | 2026-10-13 | minor | Document pinned PngSuite files, integrity checks and download budgets (#1729). |

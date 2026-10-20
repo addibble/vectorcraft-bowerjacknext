@@ -8,6 +8,12 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 [lints]
 workspace = true
 
+[features]
+default = ["translations"]
+# The interface's translations (`src/i18n/*.tsv`, about 6.5 MB of the binary). Off, the interface is
+# English only and offers no other language: for an embedder whose interface is English.
+translations = []
+
 [dependencies]
 craft-ui = { workspace = true }
 vectorcraft-geom = { workspace = true }
