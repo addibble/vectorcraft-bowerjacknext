@@ -32,7 +32,9 @@ vectorcraft-svg = { path = "crates/svg" }
 vectorcraft-pdf = { path = "crates/pdf" }
 vectorcraft-format = { path = "crates/format" }
 vectorcraft-tools = { path = "crates/tools" }
-vectorcraft-engine = { path = "crates/engine" }
+# Without its default `bundled-fonts`, as vectorcraft-text: each crate that wants the fonts asks for
+# them, so an embedder can build without them (docs/development.md › Leaving out the bundled fonts).
+vectorcraft-engine = { path = "crates/engine", default-features = false }
 vectorcraft-ui-egui = { path = "crates/ui-egui" }
 vectorcraft-mcp = { path = "crates/mcp" }
 vectorcraft-testkit = { path = "crates/testkit" }
