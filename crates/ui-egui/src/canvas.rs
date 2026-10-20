@@ -290,10 +290,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let origin_preview = if app.ui.view.rulers && app.ui.screen_mode < 3 { ruler_input(app, ui, full, rect, &xf) } else { None };
     crate::document_drag::drop_on_canvas(app, &resp, &xf);
     panel_drop(app, ui, &resp, &xf);
-    // In Presentation Mode a right click or a long touch opens no context menu.
-    if app.ui.screen_mode < 3 {
-        context_menu(app, &resp, &xf);
-    }
+    context_menu(app, &resp, &xf);
     let painter = ui.painter_at(rect);
     let Some(st) = app.session.active() else { return };
     let doc = st.doc.clone();
@@ -646,10 +643,7 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         }
         rulers(ui, full, &xf, app.hover_doc, app.session.general_unit(), origin_preview.unwrap_or_else(|| app.ruler_origin()), &t);
     }
-    // The task bar is not drawn while the Simplify slider shows.
-    if app.ui.task_bar && !revolve_edit && !app.session.tool_busy() && app.ui.screen_mode < 3 && !crate::dialogs::simplify_slider::showing(app) {
-        task_bar(app, ui, &xf);
-    }
+    task_bar(app, ui, &xf);
     if app.ui.screen_mode < 3 {
         crate::free_transform::show(app, ui, xf.rect);
     }
@@ -2160,7 +2154,17 @@ fn hit_with<T>(
 /// context menu lists what applies to the selection ([`crate::menus::context_items`]). The locked
 /// objects under the pointer ([`vectorcraft_doc::hit::locked_objects_at`]) are kept in
 /// `ui.context_locked` while the menu is open, for its Unlock submenu.
-fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
+///
+/// In Presentation Mode a right click or a long touch opens no menu. An embedder that draws documents on a
+/// canvas of its own gives it the response of its canvas (`Sense::click_and_drag`) and the screen
+/// mapping `xf` of its view ([`Xf::new`]), every frame: the menu then opens on a right click there,
+/// lists what applies to the selection and runs what is chosen through the app's commands, as
+/// this canvas does. A press on the canvas while the menu is open is the embedder's to drop, as
+/// this canvas does ([`egui::Response::context_menu_opened`]).
+pub fn context_menu(app: &mut VectorcraftApp, resp: &egui::Response, xf: &Xf) {
+    if app.ui.screen_mode >= 3 {
+        return;
+    }
     if resp.secondary_clicked()
         && let Some(p) = resp.interact_pointer_pos()
     {
@@ -3313,7 +3317,22 @@ fn picked_artboards_bounds(app: &VectorcraftApp) -> Option<Rect> {
 /// Options), Duplicate, Rearrange All (with two or more artboards) and Export (Export for Screens).
 /// Its handle drags it anywhere on the canvas; unpinned it keeps that offset as it follows the
 /// selection, pinned it stays put ([`crate::state::TaskBarPlace`]).
-fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
+///
+/// It shows when Window › Task Bar is on and no tool is busy, and not while the Simplify slider,
+/// the 3D revolve gizmo or Presentation Mode has the canvas. An embedder that draws documents on
+/// a canvas of its own shows it with this, after its document and the tools' overlays, with the
+/// screen mapping `xf` of its view ([`Xf::new`]): the bar then sits
+/// under the selection as that view places it and runs what is pressed through the app's
+/// commands, as this canvas does.
+pub fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
+    if !app.ui.task_bar
+        || app.session.tool_busy()
+        || app.ui.screen_mode >= 3
+        || app.ui.dialog.as_ref().is_some_and(crate::dialogs::revolve_gizmo::active)
+        || crate::dialogs::simplify_slider::showing(app)
+    {
+        return;
+    }
     let t = Tokens::get(ui.ctx());
     let on_artboards = app.session.tool_id() == "artboard";
     if !on_artboards
@@ -3475,6 +3494,8 @@ fn task_bar(app: &mut VectorcraftApp, ui: &mut Ui, xf: &Xf) {
                     for (label, icon, cmd, params) in &items {
                         let galley = ui.painter().layout_no_wrap(label.to_string(), egui::FontId::proportional(13.0), t.text_strong);
                         let (r, resp) = ui.allocate_exact_size(vec2(galley.size().x + 38.0, 30.0), Sense::click());
+                        // A text button by its label, for screen readers and egui's test harness.
+                        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, ui.is_enabled(), *label));
                         if resp.hovered() {
                             ui.painter().rect_filled(r, CornerRadius::same(3), t.hover);
                         }
@@ -8541,6 +8562,106 @@ mod tests {
         assert_eq!(app.session.tool_options()["selected"], json!([4, 3]), "the copies are selected, artboard 3's copy active");
         app.run("edit.undo", json!({})).unwrap();
         assert_eq!(boards(&app), before, "one undo step");
+    }
+
+    /// A clipping group's Contextual Task Bar offers Edit Clipping Path, which selects the
+    /// clipping path for the selection tools to transform alone, and its text buttons are named
+    /// by their labels for screen readers and egui's test harness.
+    #[test]
+    fn the_task_bar_edits_a_clip_groups_clipping_path_and_names_its_buttons() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        let art = app.session.execute("shape.rectangle", &json!({"x": 100, "y": 80, "width": 200, "height": 140})).unwrap()["id"].clone();
+        let mask = app.session.execute("shape.ellipse", &json!({"x": 150, "y": 100, "width": 100, "height": 100})).unwrap()["id"].clone();
+        app.session.execute("select.set", &json!({"ids": [art, mask]})).unwrap();
+        let group = app.session.execute("object.clippingMask.make", &json!({})).unwrap()["id"].clone();
+        app.select_tool("selection");
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        let ctx = egui::Context::default();
+        let names = |app: &mut VectorcraftApp| task_bar_labels(app, &ctx).into_iter().map(|(t, _)| t).collect::<Vec<_>>();
+        assert_eq!(names(&mut app), ["Edit Clipping Path", "Release Clipping Mask", "Duplicate"]);
+        let press = |app: &mut VectorcraftApp, label: &str| {
+            let labels = task_bar_labels(app, &ctx);
+            let at = labels.iter().find(|(t, _)| t == label).unwrap_or_else(|| panic!("{label} in {labels:?}")).1.center();
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Primary, pressed, modifiers: Default::default() };
+            frame(app, &ctx, vec![egui::Event::PointerMoved(at)]);
+            frame(app, &ctx, vec![button(true)]);
+            frame(app, &ctx, vec![button(false)]);
+        };
+        let selected = |app: &VectorcraftApp| app.session.active().unwrap().selection.objects.iter().map(|n| json!(n.0)).collect::<Vec<_>>();
+        press(&mut app, "Edit Clipping Path");
+        assert_eq!(selected(&app), std::slice::from_ref(&mask), "Edit Clipping Path selects the clipping path");
+        // The bar's text buttons are named for screen readers (and egui's test harness) by their
+        // labels.
+        app.run("select.set", json!({"ids": [group]})).unwrap();
+        ctx.enable_accesskit();
+        frame(&mut app, &ctx, vec![]);
+        let raw = egui::RawInput { screen_rect: Some(egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0))), ..Default::default() };
+        let out = ctx.run_ui(raw, |ui| show(&mut app, ui));
+        let tree = out.platform_output.accesskit_update.expect("AccessKit is on");
+        let named: Vec<String> = tree
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == egui::accesskit::Role::Button)
+            .filter_map(|(_, node)| node.label().map(str::to_owned))
+            .collect();
+        for label in ["Edit Clipping Path", "Release Clipping Mask", "Duplicate"] {
+            assert!(named.iter().any(|n| n == label), "{label} is not a named button: {named:?}");
+        }
+    }
+
+    /// An embedder calls `task_bar` and `context_menu` directly, on a canvas of its own: the bar
+    /// shows under the conditions the stock canvas uses, which are inside the function (Window ›
+    /// Task Bar off or Presentation Mode shows none), and the context menu opens on a right click
+    /// except in Presentation Mode.
+    #[test]
+    fn an_embedders_task_bar_and_context_menu_keep_the_canvases_conditions() {
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.session.execute("file.new", &json!({"width": 400, "height": 300})).unwrap();
+        app.session.execute("shape.rectangle", &json!({"x": 100, "y": 80, "width": 200, "height": 140})).unwrap();
+        app.select_tool("selection");
+        let ctx = egui::Context::default();
+        let rect = egui::Rect::from_min_size(Pos2::ZERO, vec2(800.0, 600.0));
+        // An embedder's canvas: its own response and its own screen mapping of the app's view.
+        let frame = |app: &mut VectorcraftApp, events: Vec<egui::Event>| {
+            let raw = egui::RawInput { screen_rect: Some(rect), events, ..Default::default() };
+            let mut out = ctx.run_ui(raw, |ui| {
+                let resp = ui.interact(rect, egui::Id::new("embedder-canvas"), Sense::click_and_drag());
+                let view = *app.view().unwrap_or(&View::default());
+                let xf = Xf::new(rect, &view);
+                context_menu(app, &resp, &xf);
+                task_bar(app, ui, &xf);
+            });
+            out.textures_delta.clear();
+        };
+        let bar_shows = |app: &mut VectorcraftApp| {
+            frame(app, vec![]);
+            frame(app, vec![]);
+            task_bar_rect(&ctx).is_some()
+        };
+        assert!(bar_shows(&mut app), "the bar shows under the selection");
+        app.ui.task_bar = false;
+        assert!(!bar_shows(&mut app), "Window › Task Bar off");
+        app.ui.task_bar = true;
+        app.ui.screen_mode = 3;
+        assert!(!bar_shows(&mut app), "Presentation Mode");
+        app.ui.screen_mode = 0;
+        assert!(bar_shows(&mut app));
+        let right_click = |app: &mut VectorcraftApp| {
+            let at = pos2(400.0, 300.0);
+            let button =
+                |pressed| egui::Event::PointerButton { pos: at, button: egui::PointerButton::Secondary, pressed, modifiers: Default::default() };
+            frame(app, vec![egui::Event::PointerMoved(at)]);
+            frame(app, vec![button(true)]);
+            frame(app, vec![button(false)]);
+            frame(app, vec![]);
+            egui::Popup::is_any_open(&ctx)
+        };
+        app.ui.screen_mode = 3;
+        assert!(!right_click(&mut app), "Presentation Mode opens no context menu");
+        app.ui.screen_mode = 0;
+        assert!(right_click(&mut app), "a right click opens the context menu");
     }
 
     /// With anchors direct-selected, the Contextual Task Bar offers Remove Anchor Points, Connect,
