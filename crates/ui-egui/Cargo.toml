@@ -9,10 +9,14 @@ description = "VectorCraft egui frontend (menus, panels, tools and canvas); swap
 workspace = true
 
 [features]
-default = ["translations"]
+default = ["translations", "bundled-fonts"]
 # The interface's translations (`src/i18n/*.tsv`, about 6.5 MB of the binary). Off, the interface is
 # English only and offers no other language: for an embedder whose interface is English.
 translations = []
+# The fonts vectorcraft-text bundles for documents, through the engine's `bundled-fonts`. Off, for
+# an embedder that supplies every document font at run time (`vectorcraft_text::FontDb::add_font`);
+# the interface's own faces (theme.rs) stay, so it saves the 1.4 MB of the others.
+bundled-fonts = ["vectorcraft-engine/bundled-fonts"]
 
 [dependencies]
 craft-ui = { workspace = true }

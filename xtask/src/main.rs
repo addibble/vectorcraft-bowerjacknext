@@ -105,6 +105,25 @@ fn run(mut cmd: Command, what: &str) -> Result<(), String> {
     if status.success() { Ok(()) } else { Err(format!("{what}: exited with {status}")) }
 }
 
+/// `vectorcraft-ui-egui` without its default features leaves vectorcraft-text's bundled fonts out:
+/// no crate it depends on turns them on (docs/development.md › Leaving out the bundled fonts).
+fn ui_egui_without_bundled_fonts() -> Result<(), String> {
+    let what = "cargo tree -p vectorcraft-ui-egui --no-default-features -e features,normal -i vectorcraft-text";
+    eprintln!("$ {what}");
+    let out = cargo()
+        .args(["tree", "-p", "vectorcraft-ui-egui", "--no-default-features", "-e", "features,normal", "-i", "vectorcraft-text"])
+        .output()
+        .map_err(|e| format!("{what}: failed to spawn: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("{what}: exited with {}:\n{}", out.status, String::from_utf8_lossy(&out.stderr)));
+    }
+    let tree = String::from_utf8_lossy(&out.stdout);
+    if tree.contains("vectorcraft-text feature \"bundled-fonts\"") {
+        return Err(format!("vectorcraft-ui-egui without default features still bundles the fonts:\n{tree}"));
+    }
+    Ok(())
+}
+
 pub fn metadata() -> Result<serde_json::Value, String> {
     let out = cargo().args(["metadata", "--format-version", "1", "--no-deps"]).output().map_err(|e| format!("cargo metadata: {e}"))?;
     if !out.status.success() {
@@ -212,7 +231,9 @@ fn cmd_ci() -> Result<(), String> {
                 // vectorcraft-text as embedders that bring their own fonts build it.
                 let mut c = cargo();
                 c.args(["test", "-p", "vectorcraft-text", "--no-default-features", "--test", "without_bundled_fonts"]);
-                run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts")
+                run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts")?;
+                // The egui panels as such an embedder builds them: nothing turns the fonts back on.
+                ui_egui_without_bundled_fonts()
             }),
         ),
         (
