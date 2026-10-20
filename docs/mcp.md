@@ -243,7 +243,10 @@ records queued at the old level are dropped rather than replayed at the new one.
 Installing the logger that receives those records is `vectorcraft-cli`'s job, not the library's: a
 crate that installed one would override whatever logger an embedder had already set up. Embedding
 `vectorcraft-mcp` directly means calling `vectorcraft_mcp::logging::install()` yourself if you want
-log records to reach your client.
+log records to reach your client, and asking for the fonts the engine bundles yourself if its
+documents should have them: `vectorcraft-engine` with its `bundled-fonts` feature, as
+`vectorcraft-cli` does (the library leaves the choice to the embedder; docs/development.md › Leaving
+out the bundled fonts).
 
 ### Long calls: cancellation, progress and a busy engine
 
