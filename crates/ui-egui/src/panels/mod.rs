@@ -117,7 +117,9 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
     egui::Grid::new((id, "corners")).num_columns(2).spacing(vec2(6.0, 4.0)).show(ui, |ui| {
         for (k, label) in rectangle_corners() {
             dim_label(ui, label);
-            if let Some(v) = crate::widgets::num_field(ui, (id, "corner", k), Some(lc.radius(k)), unit, width) {
+            if let Some(v) = crate::widgets::keyed(ui, crate::widgets::FieldKey::CornerRadius, |ui| {
+                crate::widgets::num_field(ui, (id, "corner", k), Some(lc.radius(k)), unit, width)
+            }) {
                 app.run("object.setLiveShape", json!({"radius": v, "corners": [k]})).ok();
             }
             ui.end_row();
@@ -127,7 +129,8 @@ fn corner_fields(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: &str, widt
 
 /// [`corner_radius_row`]'s field, `width` wide.
 pub(crate) fn corner_radius_field(app: &mut VectorcraftApp, ui: &mut Ui, n: &Node, id: impl std::hash::Hash + std::fmt::Debug, width: f32) {
-    if let Some(r) = crate::widgets::num_field(ui, id, corner_radius(app, n), app.session.general_unit(), width) {
+    let (radius, unit) = (corner_radius(app, n), app.session.general_unit());
+    if let Some(r) = crate::widgets::keyed(ui, crate::widgets::FieldKey::CornerRadius, |ui| crate::widgets::num_field(ui, id, radius, unit, width)) {
         app.run("object.setLiveShape", json!({"radius": r})).ok();
     }
 }
@@ -406,6 +409,7 @@ pub(crate) fn paint_chip(app: &mut VectorcraftApp, ui: &mut Ui, stroke: bool, si
     let resp = crate::widgets::chip_button_named(ui, size, chevron, tip, |ui, chip| {
         crate::widgets::proxy_chip(ui, chip, &paint, mixed, stroke.then_some(size * 0.25));
     });
+    crate::widgets::field_drawn(ui, &resp, if stroke { crate::widgets::FieldKey::Stroke } else { crate::widgets::FieldKey::Fill });
     if resp.clicked() {
         app.run("paint.toggleActive", json!({ "fill": !stroke })).ok();
         set_pstate(ui.ctx(), MIXER, ui.input(|i| i.modifiers.shift));

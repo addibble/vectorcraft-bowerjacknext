@@ -8,7 +8,7 @@ use vectorcraft_engine::cmd::newdoc;
 
 use super::{corner_radius_row, first_selected, pstate, set_pstate};
 use crate::theme::Tokens;
-use crate::widgets::{self, dim_label, divider, section_header};
+use crate::widgets::{self, FieldKey, dim_label, divider, section_header};
 use crate::{VectorcraftApp, icons};
 
 /// The panel for what is selected: the selection's kind as its heading, then its sections (Edit
@@ -167,7 +167,7 @@ fn clip_group_buttons(app: &mut VectorcraftApp, ui: &mut Ui, has_contents: bool)
 
 /// The one selected image: its file (or Embedded), colour mode and resolution, and the Links
 /// panel's actions for it.
-fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn image_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let Some(i) = crate::place::selected_image_info(app) else { return };
     let (name, details) = crate::place::image_summary(i);
@@ -457,7 +457,7 @@ fn artboard_fill_row(app: &mut VectorcraftApp, ui: &mut Ui, i: usize, color: Opt
     }
 }
 
-fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn document_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     let units = app.session.general_unit();
     section_header(ui, tl!("Document"));
     ui.horizontal(|ui| {
@@ -568,20 +568,20 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         let link = super::transform::proportional(app, ui);
         egui::Grid::new("xf-grid").num_columns(4).spacing([4.0, 6.0]).min_col_width(0.0).show(ui, |ui| {
             dim_label(ui, "X:");
-            if let Some(v) = widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw) {
+            if let Some(v) = widgets::keyed(ui, FieldKey::X, |ui| widgets::num_field(ui, "tx", Some(rp.x - origin.x), units, fw)) {
                 app.run("object.setBounds", json!({"x": v + origin.x, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "W:");
-            if let Some(v) = widgets::size_field(ui, "tw", Some(b.width()), units, fw) {
+            if let Some(v) = widgets::keyed(ui, FieldKey::Width, |ui| widgets::size_field(ui, "tw", Some(b.width()), units, fw)) {
                 app.run("object.setBounds", json!({"width": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
             dim_label(ui, "Y:");
-            if let Some(v) = widgets::num_field(ui, "ty", Some(rp.y - origin.y), units, fw) {
+            if let Some(v) = widgets::keyed(ui, FieldKey::Y, |ui| widgets::num_field(ui, "ty", Some(rp.y - origin.y), units, fw)) {
                 app.run("object.setBounds", json!({"y": v + origin.y, "reference": refi, "copy": copy})).ok();
             }
             dim_label(ui, "H:");
-            if let Some(v) = widgets::size_field(ui, "th", Some(b.height()), units, fw) {
+            if let Some(v) = widgets::keyed(ui, FieldKey::Height, |ui| widgets::size_field(ui, "th", Some(b.height()), units, fw)) {
                 app.run("object.setBounds", json!({"height": v, "reference": refi, "proportional": link, "copy": copy})).ok();
             }
             ui.end_row();
@@ -593,7 +593,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
         let icon = icons::icon(ui, "rotate-ccw", 16.0, Tokens::get(ui.ctx()).icon);
         crate::scrub::note_label(ui, icon.rect);
         // The bounding box's angle: a new value turns the selection to it.
-        if let Some(a) = widgets::plain_field(ui, "rot", bx.angle, "°", 2, fw) {
+        if let Some(a) = widgets::keyed(ui, FieldKey::Angle, |ui| widgets::plain_field(ui, "rot", bx.angle, "°", 2, fw)) {
             app.run("object.rotate", json!({"angle": a, "absolute": true, "copy": copy})).ok();
         }
         ui.add_space(10.0);
@@ -635,7 +635,7 @@ pub fn transform_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     }
 }
 
-fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     let Some(n) = first_selected(app) else { return };
     section_header(ui, tl!("Appearance"));
     fill_stroke_rows(app, ui);
@@ -643,7 +643,9 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
     ui.horizontal(|ui| {
         widgets::field_label(ui, egui::RichText::new(tl!("Opacity")).size(12.0));
         ui.add_space(8.0);
-        if let Some(o) = widgets::range_field(ui, "ap-op", n.opacity as f64 * 100.0, 0.0..=100.0, "%", 0, fw) {
+        if let Some(o) =
+            widgets::keyed(ui, FieldKey::Opacity, |ui| widgets::range_field(ui, "ap-op", n.opacity as f64 * 100.0, 0.0..=100.0, "%", 0, fw))
+        {
             app.run("object.setProps", json!({"opacity": o})).ok();
         }
         if widgets::icon_button(ui, "ellipsis", tl!("Transparency"), false, 22.0).clicked() {
@@ -663,7 +665,7 @@ fn appearance_section(app: &mut VectorcraftApp, ui: &mut Ui) {
 /// The Fill and Stroke rows, with the Control bar's widgets: the chips (a click opens the
 /// swatches, Shift-click the mixer), the Stroke link that opens the Stroke panel as a popover
 /// and the weight spinner with its presets. With nothing selected they set up the next object.
-fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
+pub fn fill_stroke_rows(app: &mut VectorcraftApp, ui: &mut Ui) {
     let t = Tokens::get(ui.ctx());
     let weight = super::stroke::shown_weight(app, super::current_stroke(app).as_ref(), &super::stroke_mixed(app, ui.ctx()));
     let fw = super::field_width(ui);
@@ -700,7 +702,7 @@ pub fn type_sections(app: &mut VectorcraftApp, ui: &mut Ui) {
     if let Some((_, para)) = super::character::text_style(app) {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 3.0;
-            super::paragraph::alignment_buttons(app, ui, &para, 24.0);
+            widgets::keyed(ui, FieldKey::Alignment, |ui| super::paragraph::alignment_buttons(app, ui, &para, 24.0));
             if widgets::icon_button(ui, "ellipsis", tl!("More Paragraph options"), false, 24.0).clicked() {
                 app.ui.open_panel = Some("paragraph".into());
             }
@@ -816,6 +818,63 @@ mod tests {
         app.run("object.setLiveShape", json!({"pieStart": 30, "pieEnd": 120})).unwrap();
         let labels: Vec<String> = panel_frame(&mut app, &ctx, vec![], transform_section).into_iter().map(|(t, _)| t).collect();
         assert!(labels.iter().any(|s| s == "30°") && labels.iter().any(|s| s == "120°"), "{labels:?}");
+    }
+
+    /// One frame of `draw` with a field hook installed: the keys it reports, each with the rect of
+    /// its field, in order.
+    fn keys_seen(app: &mut VectorcraftApp, draw: fn(&mut VectorcraftApp, &mut Ui)) -> Vec<(widgets::FieldKey, Rect)> {
+        let ctx = egui::Context::default();
+        // A first frame lays the grids out; the fields are where they stay from the second on.
+        panel_frame(app, &ctx, vec![], draw);
+        let seen = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let sink = seen.clone();
+        widgets::set_field_hook(&ctx, Some(std::sync::Arc::new(move |_: &mut Ui, r: &egui::Response, k| sink.lock().unwrap().push((k, r.rect)))));
+        panel_frame(app, &ctx, vec![], draw);
+        // Without the hook, nothing is reported.
+        widgets::set_field_hook(&ctx, None);
+        let before = seen.lock().unwrap().len();
+        panel_frame(app, &ctx, vec![], draw);
+        assert_eq!(seen.lock().unwrap().len(), before);
+        seen.lock().unwrap().clone()
+    }
+
+    /// An embedder's field hook hears each Properties field with the property it edits and the
+    /// field's own rect: for a live rectangle its Transform fields, Corner Radius, Fill, Stroke,
+    /// weight and Opacity; for type its font, Character fields and alignment; and the Stroke and
+    /// Character panels' own.
+    #[test]
+    fn the_field_hook_hears_each_field_with_its_property_and_rect() {
+        use widgets::FieldKey as K;
+        let mut app = VectorcraftApp::new(Session::new(), Default::default());
+        app.run("file.new", json!({"width": 200, "height": 100})).unwrap();
+        app.run("shape.rectangle", json!({"x": 10, "y": 10, "width": 50, "height": 40})).unwrap();
+        let seen = keys_seen(&mut app, show);
+        let keys: Vec<K> = seen.iter().map(|(k, _)| *k).collect();
+        for k in [K::X, K::Y, K::Width, K::Height, K::Angle, K::CornerRadius, K::Fill, K::Stroke, K::StrokeWeight, K::Opacity] {
+            assert!(keys.contains(&k), "{k:?} in {keys:?}");
+        }
+        let at = |k: K| seen.iter().find(|(s, _)| *s == k).map(|(_, r)| *r).unwrap();
+        assert!(seen.iter().all(|(_, r)| r.width() > 4.0 && r.height() > 4.0), "{seen:?}");
+        // X and W share a row, X first; Y is the row below.
+        assert!(at(K::X).right() <= at(K::Width).left() && (at(K::X).center().y - at(K::Width).center().y).abs() < 1.0);
+        assert!(at(K::Y).top() >= at(K::X).bottom());
+        assert!(at(K::Fill).bottom() <= at(K::Stroke).top() + 1.0);
+
+        let stroke = keys_seen(&mut app, super::super::stroke::show);
+        let keys: Vec<K> = stroke.iter().map(|(k, _)| *k).collect();
+        for k in [K::StrokeWeight, K::StrokeCap, K::StrokeJoin, K::MiterLimit, K::Dash] {
+            assert!(keys.contains(&k), "{k:?} in {keys:?}");
+        }
+
+        app.run("text.create", json!({"x": 20, "y": 50, "text": "Axis", "size": 12})).unwrap();
+        let keys: Vec<K> = keys_seen(&mut app, show).iter().map(|(k, _)| *k).collect();
+        for k in [K::FontFamily, K::FontStyle, K::FontSize, K::Leading, K::Kerning, K::Tracking, K::Alignment] {
+            assert!(keys.contains(&k), "{k:?} in {keys:?}");
+        }
+        let keys: Vec<K> = keys_seen(&mut app, super::super::character::show).iter().map(|(k, _)| *k).collect();
+        for k in [K::VerticalScale, K::HorizontalScale, K::BaselineShift, K::CharacterRotation] {
+            assert!(keys.contains(&k), "{k:?} in {keys:?}");
+        }
     }
 
     /// The Snap Options and Scale Strokes & Effects checkboxes keep a visible box at rest in every

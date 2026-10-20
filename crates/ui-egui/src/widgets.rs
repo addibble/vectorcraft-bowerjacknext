@@ -9,6 +9,84 @@ use vectorcraft_doc::Unit;
 use crate::theme::{self, Tokens};
 use crate::{icons, scrub};
 
+/// The property a Properties field edits, as an embedder's [`FieldHook`] is told it.
+#[non_exhaustive]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum FieldKey {
+    /// The selection's X, Y, W and H (Transform).
+    X,
+    Y,
+    Width,
+    Height,
+    /// The selection's angle (Transform).
+    Angle,
+    /// A live rectangle's corner radius, one field or each corner's.
+    CornerRadius,
+    /// The fill and stroke color chips.
+    Fill,
+    Stroke,
+    /// The stroke weight field (Properties, the Stroke panel, the Control bar).
+    StrokeWeight,
+    /// The Stroke panel's Cap and Corner buttons and its miter Limit.
+    StrokeCap,
+    StrokeJoin,
+    MiterLimit,
+    /// The Stroke panel's six dash and gap fields, together.
+    Dash,
+    /// The object's opacity (Properties › Appearance).
+    Opacity,
+    /// The font family menu and the font style menu.
+    FontFamily,
+    FontStyle,
+    /// The Character fields.
+    FontSize,
+    Leading,
+    Kerning,
+    Tracking,
+    VerticalScale,
+    HorizontalScale,
+    BaselineShift,
+    CharacterRotation,
+    /// The paragraph alignment buttons (Properties › Paragraph).
+    Alignment,
+}
+
+/// An embedder's hook, run after each keyed field is drawn ([`keyed`]) with the field's response
+/// and its [`FieldKey`]: it may paint over the field or put a small widget on it
+/// (`ui.put(rect, …)`), but adds nothing to the layout (the fields sit in grids).
+pub type FieldHook = std::sync::Arc<dyn Fn(&mut Ui, &Response, FieldKey) + Send + Sync>;
+
+fn field_hook_id() -> egui::Id {
+    egui::Id::new("vectorcraft-field-hook")
+}
+
+/// Run `hook` after every keyed field drawn in `ctx` from now on (`None`: no more).
+pub fn set_field_hook(ctx: &egui::Context, hook: Option<FieldHook>) {
+    ctx.data_mut(|d| {
+        if let Some(h) = hook {
+            d.insert_temp(field_hook_id(), h);
+        } else {
+            d.remove::<FieldHook>(field_hook_id());
+        }
+    });
+}
+
+/// Draw a field with `add` and tell the [`FieldHook`], if there is one, that it edits `key`. The
+/// field is drawn in a scope, which takes the place in the layout the field would.
+pub fn keyed<R>(ui: &mut Ui, key: FieldKey, add: impl FnOnce(&mut Ui) -> R) -> R {
+    let r = ui.scope(add);
+    field_drawn(ui, &r.response, key);
+    r.inner
+}
+
+/// Tell the [`FieldHook`], if there is one, that the field `response` was drawn and edits `key`
+/// (for a field whose response is at hand; [`keyed`] for the others).
+pub fn field_drawn(ui: &mut Ui, response: &Response, key: FieldKey) {
+    if let Some(hook) = ui.ctx().data(|d| d.get_temp::<FieldHook>(field_hook_id())) {
+        hook(ui, response, key);
+    }
+}
+
 /// Square icon button; `selected` draws the pressed well.
 pub fn icon_button(ui: &mut Ui, icon: &str, tip: &str, selected: bool, size: f32) -> Response {
     let (_, resp) = ui.allocate_exact_size(Vec2::splat(size), Sense::click());
@@ -2796,6 +2874,48 @@ pub(crate) mod accessibility_tests {
         assert_eq!(s("Weight"), (None, None, None, None), "a mixed value");
         assert_eq!(s("H"), (Some(210.0), Some(0.0), Some(360.0), Some("210°".into())));
         assert_eq!(s("Brightness"), (Some(50.0), Some(0.0), Some(100.0), Some("50%".into())));
+    }
+}
+
+#[cfg(test)]
+mod field_hook_tests {
+    use super::*;
+
+    /// A keyed field takes the place the field alone would, in a grid as in a row: the widgets
+    /// around it are laid out the same, so a field hook never moves a panel's layout.
+    #[test]
+    fn a_keyed_field_takes_the_place_of_the_field() {
+        let layout = |keyed_fields: bool| {
+            let ctx = egui::Context::default();
+            let mut rects = vec![];
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                egui::Grid::new("g").num_columns(4).show(ui, |ui| {
+                    for row in 0..2 {
+                        rects.push(ui.label("X:").rect);
+                        let field = |ui: &mut Ui| plain_field(ui, ("f", row), 1.0, "", 0, 60.0);
+                        if keyed_fields {
+                            keyed(ui, FieldKey::X, field)
+                        } else {
+                            field(ui)
+                        };
+                        rects.push(ui.label("W:").rect);
+                        rects.push(ui.button("b").rect);
+                        ui.end_row();
+                    }
+                });
+                ui.horizontal(|ui| {
+                    if keyed_fields {
+                        keyed(ui, FieldKey::Opacity, |ui| plain_field(ui, "o", 1.0, "%", 0, 40.0))
+                    } else {
+                        plain_field(ui, "o", 1.0, "%", 0, 40.0)
+                    };
+                    rects.push(ui.label("after").rect);
+                });
+            });
+            out.textures_delta.clear();
+            rects
+        };
+        assert_eq!(layout(true), layout(false));
     }
 }
 
