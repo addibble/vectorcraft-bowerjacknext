@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-10-21 · **Change:** painting the tools' overlays on an embedder's canvas (`canvas::paint_overlays`).
 > **Last updated:** 2026-10-21 · **Change:** the interface faces as vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels itself.
 > **Last updated:** 2026-10-21 · **Change:** choosing the translations (a `lang-<code>` feature per language).
 > **Last updated:** 2026-10-21 · **Change:** leaving out the bundled fonts with the egui panels (vectorcraft-ui-egui's and vectorcraft-mcp's `bundled-fonts` features).
@@ -315,6 +316,17 @@ code. Preferences and the Language menu offer Automatic, English and the languag
 - `cargo xtask ci`'s `no-translations` step lints the crate and its tests with no language feature,
   as an English-only embedder builds it.
 
+## Painting the tools' overlays on a canvas of one's own (embedders)
+
+An embedder that draws documents on a canvas of its own and drives the engine's tools
+(`Session::pointer`) paints their feedback (`Session::overlays`: marquees, paths, anchors,
+Curvature points, handles, labels, measurements, gradient stops; `vectorcraft_engine::tools::Overlay`)
+with `vectorcraft_ui_egui::canvas::paint_overlays(painter, xf, overlays, prefs)`, the painter the
+canvas uses, so it keeps up with the tools. It paints them after the document and the selection,
+as the canvas does. `xf` (`canvas::Xf`) maps the document to the screen. The
+selection's own anchors, handles and bounding box, and the canvas's other feedback, are not tool
+overlays and stay the canvas's.
+
 ## Cursors
 
 `crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
@@ -488,6 +500,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-21 | minor | Document `canvas::paint_overlays` for embedders (Painting the tools' overlays on a canvas of one's own). |
 | 2026-10-21 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels without `VectorcraftApp::logic`. |
 | 2026-10-21 | minor | Document the language features of vectorcraft-ui-egui (Localisation › Choosing the translations). |
 | 2026-10-21 | minor | M3: highlighted-text Eyedropper sampling preserves ranges and rejects unsupported source/target transparency atomically; regression-tested; scores and estimates unchanged. |
