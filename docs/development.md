@@ -1,5 +1,6 @@
 # Development
 
+> **Last updated:** 2026-10-21 · **Change:** marking the Properties fields (`widgets::set_field_hook`, `FieldKey`).
 > **Last updated:** 2026-10-21 · **Change:** painting the tools' overlays on an embedder's canvas (`canvas::paint_overlays`).
 > **Last updated:** 2026-10-21 · **Change:** the interface faces as vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels itself.
 > **Last updated:** 2026-10-21 · **Change:** choosing the translations (a `lang-<code>` feature per language).
@@ -327,6 +328,20 @@ as the canvas does. `xf` (`canvas::Xf`) maps the document to the screen. The
 selection's own anchors, handles and bounding box, and the canvas's other feedback, are not tool
 overlays and stay the canvas's.
 
+## Marking the Properties fields (embedders)
+
+An embedder that hosts the egui panels can mark individual fields (say a linked or overridden
+indicator) without forking them. `widgets::set_field_hook(ctx, Some(hook))` installs a hook that
+runs after each Properties field is drawn, with the field's response and a `widgets::FieldKey`
+naming the property it edits: the selection's X, Y, W, H and angle, corner radius, the Fill and
+Stroke chips, stroke weight, cap, corner, miter limit and dashes, opacity, font family and style,
+the Character fields and the paragraph alignment. The hook may paint over the field or put a small
+widget on it (`ui.put`), but adds nothing to the layout, since the fields sit in grids. A field is
+keyed where it is drawn (`widgets::keyed`, or `widgets::field_drawn` when its response is at
+hand), and a keyed field takes the place the field alone would. The Properties panel's sections
+(`transform_section`, `appearance_section`, `fill_stroke_rows`, `image_section`, `type_sections`,
+`document_sections`) are public, so an embedder can also compose them with sections of its own.
+
 ## Cursors
 
 `crates/tools/src/cursors.toml` lists every `Cursor` value: when it shows, in plain behaviour terms, and where its hotspot is, so whoever draws the cursors knows what each one is for without reading the tools (CLAUDE.md › Adding a cursor). `cargo xtask cursors` (part of `cargo xtask ci`) warns about a `Cursor` value with no entry, an entry with no `Cursor` value, a repeated id or a missing field; it never fails the build. A cursor not drawn yet borrows another's look (`Cursor::stand_in`).
@@ -500,6 +515,7 @@ Scores and hour estimates are unchanged.
 
 | Date | Change | Summary |
 |---|---|---|
+| 2026-10-21 | minor | Document the Properties field hook and the public Properties sections (Marking the Properties fields). |
 | 2026-10-21 | minor | Document `canvas::paint_overlays` for embedders (Painting the tools' overlays on a canvas of one's own). |
 | 2026-10-21 | minor | Fonts › Leaving out the bundled fonts: vectorcraft-ui-egui's `interface-fonts` feature, and `theme::install_fonts` for an embedder that draws the panels without `VectorcraftApp::logic`. |
 | 2026-10-21 | minor | Document the language features of vectorcraft-ui-egui (Localisation › Choosing the translations). |
