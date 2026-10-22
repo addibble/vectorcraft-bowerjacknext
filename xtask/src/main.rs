@@ -233,7 +233,12 @@ fn cmd_ci() -> Result<(), String> {
                 c.args(["test", "-p", "vectorcraft-text", "--no-default-features", "--test", "without_bundled_fonts"]);
                 run(c, "cargo test -p vectorcraft-text --no-default-features --test without_bundled_fonts")?;
                 // The egui panels as such an embedder builds them: nothing turns the fonts back on.
-                ui_egui_without_bundled_fonts()
+                ui_egui_without_bundled_fonts()?;
+                // The panels without their interface faces still bind every family they draw in
+                // (`no-translations` lints them without default features).
+                let mut c = cargo();
+                c.args(["test", "-p", "vectorcraft-ui-egui", "--no-default-features", "--test", "install_fonts"]);
+                run(c, "cargo test -p vectorcraft-ui-egui --no-default-features --test install_fonts")
             }),
         ),
         (
