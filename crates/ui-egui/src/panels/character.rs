@@ -12,7 +12,7 @@ use vectorcraft_tools::{Mods, ToolKey};
 use super::{pstate, set_pstate};
 use crate::VectorcraftApp;
 use crate::theme::Tokens;
-use crate::widgets::{self, SpinPick, menu_item};
+use crate::widgets::{self, FieldKey, SpinPick, menu_item};
 
 /// The Font Size and Leading dropdowns' presets in points (Leading's after its Auto entry), shown
 /// in the type unit.
@@ -459,11 +459,13 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
     let fw = ((w - 66.0) / 2.0).clamp(60.0, 100.0);
     let unit = app.session.type_unit();
     egui::Grid::new(id).num_columns(2).spacing([6.0, 4.0]).show(ui, |ui| {
-        cell(ui, "T", tl!("Font Size"), |ui| size_field(app, ui, "ch-size", fw));
+        cell(ui, "T", tl!("Font Size"), |ui| widgets::keyed(ui, FieldKey::FontSize, |ui| size_field(app, ui, "ch-size", fw)));
         cell(ui, "A↕", tl!("Leading"), |ui| {
             let leading = shared_effective(app, CharStyle::effective_leading);
             let auto = shared(app, |s| s.leading.is_none()) == Some(true);
-            match widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS) {
+            match widgets::keyed(ui, FieldKey::Leading, |ui| {
+                widgets::spin_field_auto(ui, "ch-lead", leading, Some(auto), unit, fw, 1.0, 0.1, &SIZE_PRESETS)
+            }) {
                 Some(SpinPick::Value(v)) => style(app, json!({"leading": v})),
                 Some(SpinPick::Auto) => style(app, json!({"leading": "auto"})),
                 None => {}
@@ -472,12 +474,17 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
         ui.end_row();
         cell(ui, "VA", tl!("Kerning (0 = Auto)"), |ui| {
             let kerning = shared(app, |s| s.kerning.unwrap_or(0.0));
-            if let Some(v) = widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
+            if let Some(v) =
+                widgets::keyed(ui, FieldKey::Kerning, |ui| widgets::spin_plain(ui, "ch-kern", kerning, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS))
+            {
                 set_kerning(app, if v == 0.0 { json!("auto") } else { json!(v) });
             }
         });
         cell(ui, "VA↔", tl!("Tracking"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-track", shared(app, |s| s.tracking), "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS) {
+            let tracking = shared(app, |s| s.tracking);
+            if let Some(v) = widgets::keyed(ui, FieldKey::Tracking, |ui| {
+                widgets::spin_plain(ui, "ch-track", tracking, "", 0, fw, 10.0, -1000.0, &TRACKING_PRESETS)
+            }) {
                 style(app, json!({"tracking": v}));
             }
         });
@@ -486,23 +493,32 @@ pub(crate) fn metrics_grid(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, s: &
             return;
         }
         cell(ui, "IT", tl!("Vertical Scale %"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-vs", shared(app, |s| s.v_scale), "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
+            let scale = shared(app, |s| s.v_scale);
+            if let Some(v) =
+                widgets::keyed(ui, FieldKey::VerticalScale, |ui| widgets::spin_plain(ui, "ch-vs", scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS))
+            {
                 format(app, json!({"vScale": v}));
             }
         });
         cell(ui, "T↔", tl!("Horizontal Scale %"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-hs", shared_effective(app, |s| s.h_scale), "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS) {
+            let scale = shared_effective(app, |s| s.h_scale);
+            if let Some(v) =
+                widgets::keyed(ui, FieldKey::HorizontalScale, |ui| widgets::spin_plain(ui, "ch-hs", scale, "%", 1, fw, 1.0, 1.0, &SCALE_PRESETS))
+            {
                 format(app, json!({"hScale": v}));
             }
         });
         ui.end_row();
         cell(ui, "Aª", tl!("Baseline Shift"), |ui| {
-            if let Some(v) = widgets::spin_field(ui, "ch-bs", shared_effective(app, |s| s.baseline_shift), unit, fw, 1.0, -1296.0, &[]) {
+            let shift = shared_effective(app, |s| s.baseline_shift);
+            if let Some(v) = widgets::keyed(ui, FieldKey::BaselineShift, |ui| widgets::spin_field(ui, "ch-bs", shift, unit, fw, 1.0, -1296.0, &[])) {
                 format(app, json!({"baselineShift": v}));
             }
         });
         cell(ui, "⟲T", tl!("Character Rotation"), |ui| {
-            if let Some(v) = widgets::spin_plain(ui, "ch-rot", s.rotation, "°", 1, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS) {
+            if let Some(v) = widgets::keyed(ui, FieldKey::CharacterRotation, |ui| {
+                widgets::spin_plain(ui, "ch-rot", s.rotation, "°", 1, fw, 15.0, -360.0, &super::transform::ANGLE_PRESETS)
+            }) {
                 format(app, json!({"rotation": v}));
             }
         });
@@ -523,12 +539,17 @@ pub(crate) fn size_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, width:
 /// Control bar), with their `ids` and `widths`.
 pub(crate) fn font_pickers(app: &mut VectorcraftApp, ui: &mut Ui, s: &CharStyle, ids: (&str, &str), widths: (f32, f32)) {
     let sample = crate::font_menu::sample_text(app);
-    if let Some(pick) = crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), crate::font_menu::MenuLook::of(app)) {
+    let look = crate::font_menu::MenuLook::of(app);
+    if let Some(pick) =
+        widgets::keyed(ui, FieldKey::FontFamily, |ui| crate::font_menu::font_menu(ui, ids.0, &s.font_family, widths.0, sample.as_deref(), look))
+    {
         crate::font_menu::apply(app, ui.ctx(), pick);
     }
     let styles = vectorcraft_text::FontDb::global().styles(&s.font_family);
     let names: Vec<&str> = styles.iter().map(String::as_str).collect();
-    if let Some(name) = widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1).and_then(|i| names.get(i)) {
+    if let Some(name) =
+        widgets::keyed(ui, FieldKey::FontStyle, |ui| widgets::dropdown_names(ui, ids.1, &s.font_style, &names, widths.1)).and_then(|i| names.get(i))
+    {
         style(app, json!({"style": name}));
     }
 }

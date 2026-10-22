@@ -114,7 +114,8 @@ pub(crate) fn shown_weight(app: &VectorcraftApp, st: Option<&StrokeLayer>, mixed
 /// The weight spinner (Stroke panel, Control bar): Units > Stroke, presets, blank when mixed.
 pub(crate) fn weight_field(app: &mut VectorcraftApp, ui: &mut Ui, id: &str, weight: Option<f64>, width: f32) {
     let unit = app.session.stroke_unit();
-    if let Some(w) = widgets::spin_field(ui, id, weight, unit, width, 1.0, 0.0, &weight_presets(unit)) {
+    let presets = weight_presets(unit);
+    if let Some(w) = widgets::keyed(ui, widgets::FieldKey::StrokeWeight, |ui| widgets::spin_field(ui, id, weight, unit, width, 1.0, 0.0, &presets)) {
         set(app, json!({"weight": w}));
     }
 }
@@ -155,31 +156,41 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
     let align = st.as_ref().map(|s| s.align).filter(|_| !mixed.align);
     ui.horizontal(|ui| {
         row_label(ui, tl!("Cap:"));
-        for (v, icon, tip, name) in [
-            (LineCap::Butt, "dc-cap-butt", tl!("Butt Cap"), "butt"),
-            (LineCap::Round, "dc-cap-round", tl!("Round Cap"), "round"),
-            (LineCap::Square, "dc-cap-square", tl!("Projecting Cap"), "square"),
-        ] {
-            if widgets::icon_button(ui, icon, tip, cap == Some(v), 24.0).clicked() {
-                set(app, json!({"cap": name}));
-            }
-        }
+        widgets::keyed(ui, widgets::FieldKey::StrokeCap, |ui| {
+            ui.horizontal(|ui| {
+                for (v, icon, tip, name) in [
+                    (LineCap::Butt, "dc-cap-butt", tl!("Butt Cap"), "butt"),
+                    (LineCap::Round, "dc-cap-round", tl!("Round Cap"), "round"),
+                    (LineCap::Square, "dc-cap-square", tl!("Projecting Cap"), "square"),
+                ] {
+                    if widgets::icon_button(ui, icon, tip, cap == Some(v), 24.0).clicked() {
+                        set(app, json!({"cap": name}));
+                    }
+                }
+            })
+        });
     });
     ui.horizontal(|ui| {
         row_label(ui, tl!("Corner:"));
-        for (v, icon, tip, name) in [
-            (LineJoin::Miter, "dc-join-miter", tl!("Miter Join"), "miter"),
-            (LineJoin::Round, "dc-join-round", tl!("Round Join"), "round"),
-            (LineJoin::Bevel, "dc-join-bevel", tl!("Bevel Join"), "bevel"),
-        ] {
-            if widgets::icon_button(ui, icon, tip, join == Some(v), 24.0).clicked() {
-                set(app, json!({"join": name}));
-            }
-        }
+        widgets::keyed(ui, widgets::FieldKey::StrokeJoin, |ui| {
+            ui.horizontal(|ui| {
+                for (v, icon, tip, name) in [
+                    (LineJoin::Miter, "dc-join-miter", tl!("Miter Join"), "miter"),
+                    (LineJoin::Round, "dc-join-round", tl!("Round Join"), "round"),
+                    (LineJoin::Bevel, "dc-join-bevel", tl!("Bevel Join"), "bevel"),
+                ] {
+                    if widgets::icon_button(ui, icon, tip, join == Some(v), 24.0).clicked() {
+                        set(app, json!({"join": name}));
+                    }
+                }
+            })
+        });
         widgets::dim_label(ui, tl!("Limit:"));
         let lim = st.as_ref().map(|s| s.miter_limit).unwrap_or(10.0);
         if !matches!(join, Some(LineJoin::Round | LineJoin::Bevel)) {
-            if let Some(v) = widgets::range_field(ui, "stroke-limit", (!mixed.miter_limit).then_some(lim), 1.0..=500.0, " x", 0, 50.0) {
+            if let Some(v) = widgets::keyed(ui, widgets::FieldKey::MiterLimit, |ui| {
+                widgets::range_field(ui, "stroke-limit", (!mixed.miter_limit).then_some(lim), 1.0..=500.0, " x", 0, 50.0)
+            }) {
                 set(app, json!({"miterLimit": v}));
             }
         } else {
@@ -228,13 +239,17 @@ pub fn show(app: &mut VectorcraftApp, ui: &mut Ui) {
         let fw = ((ui.available_width() - 15.0) / 6.0).clamp(28.0, 40.0);
         let mut nf = shown;
         let mut changed = false;
-        for (i, f) in shown.iter().enumerate() {
-            let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field(ui, ("dash", i), *f, unit, fw)).inner;
-            if let Some(x) = r {
-                nf[i] = x.map(|v| v.max(0.0));
-                changed = true;
-            }
-        }
+        widgets::keyed(ui, widgets::FieldKey::Dash, |ui| {
+            ui.horizontal(|ui| {
+                for (i, f) in shown.iter().enumerate() {
+                    let r = ui.add_enabled_ui(dash.is_some(), |ui| widgets::opt_field(ui, ("dash", i), *f, unit, fw)).inner;
+                    if let Some(x) = r {
+                        nf[i] = x.map(|v| v.max(0.0));
+                        changed = true;
+                    }
+                }
+            })
+        });
         if changed && dash.is_some() {
             // The command keeps the dash offset and alignment.
             set(app, json!({"dash": dash_pattern(&nf)}));
